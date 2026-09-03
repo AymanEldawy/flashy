@@ -1,0 +1,18 @@
+// Production persistence contract. Replace the prototype's local repository with Prisma
+// transactions before deploying multi-user mode.
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+enum CardType { BASIC LANGUAGE }
+enum CardState { NEW LEARNING REVIEW RELEARNING SUSPENDED }
+enum ReviewRating { AGAIN HARD GOOD EASY }
+enum SessionType { DAILY DECK CUSTOM }
+
+model User { id String @id @default(uuid()) @db.Uuid email String @unique displayName String preferredLocale String @default("ar-EG") timezone String @default("Africa/Cairo") dailyGoal Int @default(10) decks Deck[] sessions StudySession[] tags Tag[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt }
+model Deck { id String @id @default(uuid()) @db.Uuid userId String @db.Uuid user User @relation(fields:[userId],references:[id],onDelete:Cascade) title String @db.VarChar(120) description String? color String? icon String? isArchived Boolean @default(false) cards Card[] sessions StudySession[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt deletedAt DateTime? @@index([userId,isArchived]) @@index([userId,updatedAt]) }
+model Card { id String @id @default(uuid()) @db.Uuid deckId String @db.Uuid deck Deck @relation(fields:[deckId],references:[id],onDelete:Cascade) cardType CardType @default(BASIC) front String back String hint String? example String? frontLanguage String? backLanguage String? isReversible Boolean @default(false) isSuspended Boolean @default(false) scheduling CardScheduling? reviews Review[] tags CardTag[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt deletedAt DateTime? @@index([deckId,createdAt]) }
+model CardScheduling { cardId String @id @db.Uuid card Card @relation(fields:[cardId],references:[id],onDelete:Cascade) state CardState @default(NEW) dueAt DateTime intervalDays Int @default(0) stepIndex Int @default(0) easeFactor Decimal @default(2.5) @db.Decimal(4,2) reviewCount Int @default(0) lapseCount Int @default(0) correctStreak Int @default(0) lastReviewedAt DateTime? createdAt DateTime @default(now()) updatedAt DateTime @updatedAt @@index([dueAt,state]) @@index([state,dueAt]) }
+model StudySession { id String @id @default(uuid()) @db.Uuid userId String @db.Uuid user User @relation(fields:[userId],references:[id]) deckId String? @db.Uuid deck Deck? @relation(fields:[deckId],references:[id]) sessionType SessionType plannedCards Int reviewedCards Int @default(0) correctCards Int @default(0) startedAt DateTime @default(now()) completedAt DateTime? durationSeconds Int @default(0) reviews Review[] }
+model Review { id String @id @default(uuid()) @db.Uuid sessionId String @db.Uuid session StudySession @relation(fields:[sessionId],references:[id]) cardId String @db.Uuid card Card @relation(fields:[cardId],references:[id]) rating ReviewRating wasCorrect Boolean responseTimeMs Int? previousState CardState nextState CardState previousIntervalDays Int nextIntervalDays Int previousEaseFactor Decimal @db.Decimal(4,2) nextEaseFactor Decimal @db.Decimal(4,2) reviewedAt DateTime @default(now()) @@index([cardId,reviewedAt]) @@index([sessionId]) @@index([reviewedAt]) }
+model Tag { id String @id @default(uuid()) @db.Uuid userId String @db.Uuid user User @relation(fields:[userId],references:[id],onDelete:Cascade) name String color String? createdAt DateTime @default(now()) cards CardTag[] @@unique([userId,name]) }
+model CardTag { cardId String @db.Uuid tagId String @db.Uuid card Card @relation(fields:[cardId],references:[id],onDelete:Cascade) tag Tag @relation(fields:[tagId],references:[id],onDelete:Cascade) @@id([cardId,tagId]) }
